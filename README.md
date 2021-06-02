@@ -29,6 +29,9 @@ At the end of the practical, the participants will
 15:30 - 15:45: [0:15] *Break*\
 15:45 - 16:30: [0:45] Association with clinical annotations
 
+## Pre-requisites
+Familiarity with understanding code written in R is required.
+
 ## References
 
 1. Lock, Eric F., et al. "Joint and individual variation explained (JIVE) for integrated analysis of multiple data types." The annals of applied statistics 7.1 (2013): 523. http://doi.org/10.1214/12-aoas597
