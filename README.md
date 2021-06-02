@@ -41,7 +41,7 @@ At the end of the practical, the participants will
 
 If you prefer watching videos over reading papers.
 
-* Laura Cantini – Benchmarking of computational approaches to multi-omics data analysis[https://network.febs.org/videos/talk2_laura-cantini]
-* Ricard Argelaguet - MOFA overview (VIB workshop 2021)[https://www.youtube.com/watch?v=_BfHeZ0s2i0]
+* [Laura Cantini – Benchmarking of computational approaches to multi-omics data analysis](https://network.febs.org/videos/talk2_laura-cantini)
+* [Ricard Argelaguet - MOFA overview (VIB workshop 2021)](https://www.youtube.com/watch?v=_BfHeZ0s2i0)
 
 
