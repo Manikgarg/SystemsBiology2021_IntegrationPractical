@@ -46,5 +46,7 @@ If you prefer watching videos over reading papers.
 
 * [Laura Cantini – Benchmarking of computational approaches to multi-omics data analysis](https://network.febs.org/videos/talk2_laura-cantini)
 * [Ricard Argelaguet - MOFA overview (VIB workshop 2021)](https://www.youtube.com/watch?v=_BfHeZ0s2i0)
+* [StatQuest: Principal Component Analysis (PCA), Step-by-Step](https://www.youtube.com/watch?v=FgakZw6K1QQ)
+* [Lecture 47 — Singular Value Decomposition | Stanford University](https://www.youtube.com/watch?v=P5mlg91as1c)
 
 
