@@ -1,0 +1,163 @@
+---
+title: "Session3_1"
+author: "Manik Garg"
+date: "02/06/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Benchmark 1: Clinical association with IGHV status and trisomy 12
+
+### Load required packages
+```{r}
+suppressMessages(library("MultiAssayExperiment"))
+suppressMessages(library("BloodCancerMultiOmics2017"))
+suppressMessages(library("pheatmap"))
+suppressMessages(library("ggplot2"))
+```
+
+### Load the required data
+```{r}
+# Load weights obtained from each method in Session 2.1 
+load("../results/WeightsList.Rdata")
+# Load factors obtained from each method in Session 2.1 
+load("../results/FactorsList.Rdata")
+```
+
+```{r}
+# Load the CLL clinical data published by Dietrich et al. in the Bioconductor package BloodCancerMultiOmics2017
+data(lpdAll, patmeta, drugs, package = "BloodCancerMultiOmics2017")
+```
+
+### Extract the relevant clinical data for this group project
+```{r}
+source("./HelperForTheCourse.R")
+clinicalData <- extractMetadata(lpdCLL, patmeta, drugs)
+```
+
+### Only keep those samples for which relevant clinical data is available for further analysis
+```{r}
+factorsList = lapply(factorsList, function(g) {
+  indices = match(rownames(clinicalData), rownames(g))
+  return(g[indices, ])
+})
+```
+
+### Save the results for later use
+```{r}
+save(clinicalData, file = "../results/ClinicalData.Rdata")
+save(factorsList, file = "../results/UpdatedFactorsList.Rdata")
+```
+
+### Visualize the weights given to each mutation by all the factors for the specified method
+
+```{r}
+source("../scripts/HelperForTheCourse.R")
+visualizeWeightsHeatmap(weightsList[["MOFA"]], 'Mutations')
+visualizeWeightsHeatmap(weightsList[["JIVE"]], 'Mutations')
+```
+
+### Plot top weighted mutations for a specified factor obtained from a specified method
+
+For each factor of the specified method, the top weighted mutations can be viewed, thus providing a better way to identify factors associated with mutations of interest, especially when heatmaps become complex to interpret like in the case of JIVE. 
+
+For starters, lets look at MOFA factor 1 which seems to have the highest (-)ve weight for IGHV status.
+
+```{r}
+methodName = "MOFA"
+factorNumber = 1
+nMutationsToDisplay = 10
+plotTopWeightsUsingSeparateWeightsAndFactors(weightsList[[methodName]], "Mutations", factor = factorNumber, nfeatures = nMutationsToDisplay)
+```
+IGHV status shows up at the top. 
+
+#### Similarly explore different factors for different methods and see which factors better associate with IGHV status and trisomy12.
+
+#### Plot sample scatter-plot
+
+To confirm whether your identified factors can successfully divide patients into two separate groups based on their IGHV status and presence or absence of trisomy12, we will plot the sample scatter. 
+
+```{r}
+IGHV <- factor(clinicalData$IGHV)
+trisomy12 <- factor(clinicalData$trisomy12)
+trisomy12 <- addNA(trisomy12) #add NA to the factor level
+
+shapes <- c(19, 17, 3) #specify shape for NA values in trisomy 12 status
+names(shapes) <- levels(trisomy12)
+
+methodName <- "JIVE"
+ggplot(data.frame(factorsList[[methodName]]), aes(x = Factor1, y = Factor3, 
+                                                  colour = IGHV, shape=trisomy12)) +
+  scale_shape_manual(values=shapes, name='trisomy12') +
+  geom_point()+ 
+  ggtitle(methodName)
+```
+
+As described in the [MOFA vignette](https://bioconductor.org/packages/devel/bioc/vignettes/MOFA/inst/doc/MOFA_example_CLL.html), we can see a clear separation between the samples based on their IGHV status (color) and presence or absence of trisomy12 status (shape). Repeat the same process for JIVE with the factors noticed above and compare their performance.
+
+#### Question: Which method gives the best seperation between the patients having IGHV status and trisomy12 mutations?
+
+### Perform selectivity analysis
+
+We also noticed that in JIVE, multiple factors have given highest weights to IGHV status and trisomy12, thereby implying that the factors are capturing similar clinical information and are not exclusive to each other. To quantify the independence of each factor in representing biological information, a selectivity score was devised by Laura et al. (2020) given by:
+
+$$Selectivity\;Score = (\frac{N_c+N_f}{2L})$$
+
+Where N<sub>c</sub> is the total number of clinical annotations significantly associated with atleast one factor, N<sub>f</sub> is the total number of factors significantly accosiated with at least one clinical annotation, and L is the total number of significant associations between clinical annotations and factors.
+
+#### Extract the selectivity results for each method
+
+```{r}
+clinicaFactoreaturesOfInterest <- c("IGHV", "SF3B1", "NOTCH1", "BRAF", "TP53", "del17p13", "del11q22.3", "trisomy12")
+pval.thr <- 0.05
+out_clinical <- calculateSelectivityScoreForClinicalAnnotations(factorsList, clinicalData, clinicaFactoreaturesOfInterest, pval.thr)
+```
+
+```{r}
+out_clinical
+```
+
+#### Question: Which method has more non-zero factors without compromising for selectivity?
+
+#### Plot the results
+```{r}
+# Prepare the data frame
+clinical_analysis <- data.frame(
+    matrix(data = NA, ncol=4, nrow=0, 
+           dimnames = list(c(), c("methods", "selectivity", "nonZeroFacs", "total_annotations"))
+          ),
+    stringsAsFactors = FALSE)
+clinical_analysis <- rbind(clinical_analysis,
+                                data.frame(methods=rownames(out_clinical), out_clinical))
+
+min_nonZero = min(clinical_analysis[, "nonZeroFacs"]) 
+max_nonZero = max(clinical_analysis[, "nonZeroFacs"]) 
+g <- ggplot(clinical_analysis, 
+            aes(x=nonZeroFacs, y=selectivity)) + 
+    geom_point(aes(colour = methods), size=5, alpha=.6, position=position_jitter(h=0, w=0.15))+ 
+    theme_bw() + 
+    #scale_shape_manual(values=c(15,17,16)) + 
+    scale_color_manual(values=c('#FF00FF', '#FF6E28', '#C8961E', '#FF0000', '#0000FF', '#A0A0A0', '#48D1CC', '#00FF00')) +
+    ylim(floor(min((clinical_analysis[,"selectivity"]*10)-.4)) / 10,
+         ceiling(max((clinical_analysis[,"selectivity"]*10)+.2)) / 10) +
+    labs(title="Clinical annotations", 
+         x="# metagenes (factors) enriched in at least one annotation") +
+    theme(plot.title = element_text(size=14,face="bold"),
+          axis.text = element_text(size=11),
+          axis.title = element_text(size=13),
+          legend.text=element_text(size=10)) +
+    ylab("Selectivity") + 
+    labs(colour = "Methods",shape="Cancer") +
+    guides(color = guide_legend(order = 1), size = guide_legend(order = 3)) + 
+    #scale_x_discrete() + scale_x_discrete(limits=min_nonZero:max_nonZero) + 
+    scale_x_discrete(limits=min_nonZero:max_nonZero, labels = c(min_nonZero:max_nonZero));
+g
+```
+
+### Print session info
+```{r}
+sessionInfo()
+```

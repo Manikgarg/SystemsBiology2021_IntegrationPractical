@@ -1,0 +1,175 @@
+---
+title: "Session2_2"
+author: "Manik Garg"
+date: "02/06/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Train different methods and save results
+
+### Make sure to point towards correct python binary
+```{r}
+reticulate::use_python("/usr/bin/python3", required = TRUE)
+```
+
+### Load required packages
+```{r}
+suppressMessages(library("MOFA2"))
+suppressMessages(library("MOFAdata"))
+suppressMessages(library("r.jive"))
+suppressMessages(library("zoo"))
+```
+
+### Load the required data
+```{r}
+utils::data("CLL_data")       
+lapply(CLL_data,dim)
+```
+
+### Visualize the data
+```{r}
+#Create MOFA object
+MOFAobject <- create_mofa(CLL_data)
+```
+
+```{r}
+MOFAobject
+```
+
+```{r}
+plot_data_overview(MOFAobject)
+```
+
+First of all we see that this dataset has both discrete (such as Mutations data) and continuous data (such as mRNA data). 
+Next we see that only Mutations data has information for all the 200 patients. Therefore, this dataset does not have equal number of features for all the samples. 
+
+Now, let us check for missing values within each data modality.
+
+```{r}
+lapply(CLL_data, function(g) table(is.na(g)))
+```
+
+We see that all of them have >= 2% of missing values. Hence, this dataset provides an opportunity to benchamrk the methods on all these real-world scenarios.
+
+Let us start with training the MOFA model which doesn't require an explicit imputation of the missing data.
+
+### MOFA
+
+#### Load pre-trained MOFA model 
+```{r}
+MOFAobject <- readRDS(url("http://ftp.ebi.ac.uk/pub/databases/mofa/cll_vignette/MOFA2_CLL.rds"))
+```
+
+```{r}
+MOFAobject
+```
+
+We limit the number of factors to 15 in all the subsequent analysis.
+```{r}
+numFactors = 15
+```
+
+#### Extract weights
+```{r}
+MOFAweights <- get_weights(MOFAobject)
+```
+
+#### Extract factors
+```{r}
+MOFAfactorsList <- get_factors(MOFAobject)
+MOFAfactors <- MOFAfactorsList[["group1"]][, 1:numFactors]
+```
+
+### Impute the data for rest of the analysis
+############# Replacing NAs with feature-wise mode in case of mutation data and feature-wise mean in case of other non-binary data ######################
+
+```{r}
+source("../scripts/HelperForTheCourse.R")
+
+#To make the comparisons with MOFA, fill in the missing values with feature-wise mean
+#Participants can play around here with various imputation techniques
+CLL_data_imputed <- list("Mutations" = t(apply(CLL_data[["Mutations"]], 1, function(x) {
+  x[which(is.na(x))] <- calculateMode(x, na.rm = TRUE)
+  return(x)})))
+CLL_data_imputed[c("Drugs", "mRNA", "Methylation")] <- lapply(CLL_data[c("Drugs", "mRNA", "Methylation")], function(x) t(na.aggregate(t(x))))
+```
+
+Note that the following sections are derived from the momix pipeline[https://github.com/ComputationalSystemsBiology/momix-notebook] made available by Cantini *et al.* (2021)[https://doi.org/10.1038/s41467-020-20430-7]
+
+### JIVE
+
+#### Train the model
+```{r}
+#Same ranks are used for the joint matrix and the individual matrices as the number of factors
+#As the ranks are already specified, method="given" is used.
+#conv="default" is used
+#maxiter=100 is used in the interest of time.
+#Feel free to explore various parameter options from the r.jive manual
+set.seed(42)
+JIVEfactorization <- jive(CLL_data_imputed, rankJ=numFactors, rankA = rep(numFactors, length(CLL_data_imputed)), method = "given", conv = "default", maxiter = 1000, showProgress=TRUE, scale = FALSE, center = TRUE)
+```
+
+#### Extract weights
+```{r}
+rankJV <- JIVEfactorization$rankJ
+rankIV.v <- JIVEfactorization$rankA
+J <- numeric(0)
+ng <- 0
+JIVEweights <- list()
+for(j in 1:length(CLL_data_imputed)){
+  J <- rbind(J,JIVEfactorization$joint[[j]])
+  ng <- c(ng,dim(JIVEfactorization$joint[[j]])[1])
+}
+
+#Extract weights and factors from the singular value decomposition (svd) of joint matrix J.
+svd.o <- svd(J)
+jV <- svd.o$v %*% diag(svd.o$d)
+for(j in 1:length(CLL_data_imputed)){
+  JIVEweights[[j]] <- svd.o$u[(1+sum(ng[1:j])):sum(ng[1:j+1]),1:rankJV]
+  rownames(JIVEweights[[j]]) <- rownames(CLL_data_imputed[[j]])
+  colnames(JIVEweights[[j]]) <- paste0("Factor", 1:numFactors)
+}
+names(JIVEweights) <- names(CLL_data_imputed)
+
+```  
+
+#### Extract factors
+```{r}
+JIVEfactors <- jV[,1:rankJV]
+rownames(JIVEfactors) <- colnames(CLL_data_imputed[[1]])
+colnames(JIVEfactors) <- paste0("Factor", 1:numFactors)
+```
+  
+### Compare the results
+
+```{r}
+plot_variance_explained(MOFAobject, factors = paste("Factor",1:numFactors, sep=""))
+plot(JIVEfactorization)
+```
+In case of MOFA => Along with variance explained per view, variance explained per factor per view can also be visualized.
+In case of JiVE => Only variance explained per view can be visualized
+
+### Save the imputed data and the results
+
+```{r}
+save(CLL_data_imputed, file = "../results/CllDataImputed.Rdata")
+```
+
+```{r}
+weightsList = list("MOFA" = MOFAweights, "JIVE" = JIVEweights)
+save(weightsList, file = "../results/WeightsList.Rdata")
+```
+
+```{r}
+factorsList = list("MOFA" = MOFAfactors, "JIVE" = JIVEfactors)
+save(factorsList, file = "../results/FactorsList.Rdata")
+```
+
+### Print session info
+```{r}
+sessionInfo()
+```
