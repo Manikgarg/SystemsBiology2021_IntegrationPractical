@@ -59,6 +59,8 @@ Let us start with training the MOFA model which doesn't require an explicit impu
 
 ### MOFA
 
+In the interest of time, we will be loading a pre-trained model. For more instructions on how you could do it by yourself, please refer to this tutorial https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/CLL.html . Other tutorials can be found here: https://biofam.github.io/MOFA2/tutorials.html 
+
 #### Load pre-trained MOFA model 
 ```{r}
 MOFAobject <- readRDS(url("http://ftp.ebi.ac.uk/pub/databases/mofa/cll_vignette/MOFA2_CLL.rds"))
@@ -70,12 +72,13 @@ MOFAobject
 
 We limit the number of factors to 15 in all the subsequent analysis.
 ```{r}
-numFactors = 15
+numFactors = 10
 ```
 
 #### Extract weights
 ```{r}
-MOFAweights <- get_weights(MOFAobject)
+MOFAweightsList <- get_weights(MOFAobject)
+MOFAweights <- lapply(MOFAweightsList, function(x){x[, 1:numFactors]})
 ```
 
 #### Extract factors
@@ -147,11 +150,12 @@ colnames(JIVEfactors) <- paste0("Factor", 1:numFactors)
 ### Compare the results
 
 ```{r}
+plot_variance_explained(MOFAobject, plot_total = T)[[2]]
 plot_variance_explained(MOFAobject, factors = paste("Factor",1:numFactors, sep=""))
 plot(JIVEfactorization)
 ```
 In case of MOFA => Along with variance explained per view, variance explained per factor per view can also be visualized.
-In case of JiVE => Only variance explained per view can be visualized
+In case of JIVE => Only variance explained per view can be visualized
 
 ### Save the imputed data and the results
 
